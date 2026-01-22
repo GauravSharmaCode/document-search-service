@@ -428,6 +428,7 @@ docker-compose exec api npm run migrate
 - [Architecture Documentation](docs/ARCHITECTURE.md) - System design and data flows
 - [Production Readiness](docs/PRODUCTION_READINESS.md) - Deployment, monitoring, and scaling
 - [Experience & Lessons Learned](docs/EXPERIENCE.md) - Industry experience insights
+- [AI Tool Usage Disclosure](docs/AI_TOOL_USAGE.md) - AI assistance details
   
 ## Prototype vs Production
 
