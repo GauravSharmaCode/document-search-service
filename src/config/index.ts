@@ -34,13 +34,19 @@ interface Config {
   };
 }
 
+const parseIntSafe = (value: string | undefined, defaultValue: number): number => {
+  if (!value) return defaultValue;
+  const parsed = parseInt(value, 10);
+  return isNaN(parsed) ? defaultValue : parsed;
+};
+
 const config: Config = {
-  port: parseInt(process.env.PORT || '3000', 10),
+  port: parseIntSafe(process.env.PORT, 3000),
   nodeEnv: process.env.NODE_ENV || 'development',
   database: {
     url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/document_search',
     host: process.env.POSTGRES_HOST || 'localhost',
-    port: parseInt(process.env.POSTGRES_PORT || '5432', 10),
+    port: parseIntSafe(process.env.POSTGRES_PORT, 5432),
     database: process.env.POSTGRES_DB || 'document_search',
     user: process.env.POSTGRES_USER || 'postgres',
     password: process.env.POSTGRES_PASSWORD || 'postgres',
@@ -51,15 +57,15 @@ const config: Config = {
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
     host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    port: parseIntSafe(process.env.REDIS_PORT, 6379),
   },
   cache: {
-    ttlSearch: parseInt(process.env.CACHE_TTL_SEARCH || '300', 10),
-    ttlDocument: parseInt(process.env.CACHE_TTL_DOCUMENT || '600', 10),
+    ttlSearch: parseIntSafe(process.env.CACHE_TTL_SEARCH, 300),
+    ttlDocument: parseIntSafe(process.env.CACHE_TTL_DOCUMENT, 600),
   },
   rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+    windowMs: parseIntSafe(process.env.RATE_LIMIT_WINDOW_MS, 60000),
+    maxRequests: parseIntSafe(process.env.RATE_LIMIT_MAX_REQUESTS, 100),
   },
   logging: {
     level: process.env.LOG_LEVEL || 'info',

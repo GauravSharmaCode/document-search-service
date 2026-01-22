@@ -1,51 +1,56 @@
-import { CreateDocumentSchema, SearchQuerySchema, DocumentIdSchema } from '../../schemas/document.schema';
+import {
+  CreateDocumentSchema,
+  SearchQuerySchema,
+  DocumentIdSchema,
+} from "../../schemas/document.schema";
 
-describe('Document Schema Validation', () => {
-  describe('CreateDocumentSchema', () => {
-    it('should validate a valid document', () => {
+describe("Document Schema Validation", () => {
+  describe("CreateDocumentSchema", () => {
+    it("should validate a valid document", () => {
       const validDocument = {
-        title: 'Test Document',
-        content: 'This is test content',
-        metadata: { category: 'test' },
+        title: "Test Document",
+        content: "This is test content",
+        metadata: { category: "test" },
       };
 
       const result = CreateDocumentSchema.safeParse(validDocument);
       expect(result.success).toBe(true);
     });
 
-    it('should reject document with missing title', () => {
+    it("should reject document with missing title", () => {
       const invalidDocument = {
-        content: 'This is test content',
+        content: "This is test content",
       };
 
       const result = CreateDocumentSchema.safeParse(invalidDocument);
       expect(result.success).toBe(false);
     });
 
-    it('should reject document with title exceeding 500 characters', () => {
+    it("should reject document with title exceeding 500 characters", () => {
       const invalidDocument = {
-        title: 'a'.repeat(501),
-        content: 'This is test content',
+        title: "a".repeat(501),
+        content: "This is test content",
       };
 
       const result = CreateDocumentSchema.safeParse(invalidDocument);
       expect(result.success).toBe(false);
     });
 
-    it('should reject document with content exceeding 1MB', () => {
+    it("should reject document with content exceeding 1MB", () => {
       const invalidDocument = {
-        title: 'Test',
-        content: 'a'.repeat(1048577),
+        title: "Test",
+        // amazonq-ignore-next-line
+        content: "a".repeat(1048577),
       };
 
       const result = CreateDocumentSchema.safeParse(invalidDocument);
       expect(result.success).toBe(false);
     });
 
-    it('should accept document without metadata', () => {
+    it("should accept document without metadata", () => {
       const validDocument = {
-        title: 'Test Document',
-        content: 'This is test content',
+        title: "Test Document",
+        content: "This is test content",
       };
 
       const result = CreateDocumentSchema.safeParse(validDocument);
@@ -53,12 +58,12 @@ describe('Document Schema Validation', () => {
     });
   });
 
-  describe('SearchQuerySchema', () => {
-    it('should validate a valid search query', () => {
+  describe("SearchQuerySchema", () => {
+    it("should validate a valid search query", () => {
       const validQuery = {
-        q: 'database',
-        limit: '10',
-        offset: '0',
+        q: "database",
+        limit: "10",
+        offset: "0",
       };
 
       const result = SearchQuerySchema.safeParse(validQuery);
@@ -69,9 +74,9 @@ describe('Document Schema Validation', () => {
       }
     });
 
-    it('should use default values for limit and offset', () => {
+    it("should use default values for limit and offset", () => {
       const queryWithoutPagination = {
-        q: 'database',
+        q: "database",
       };
 
       const result = SearchQuerySchema.safeParse(queryWithoutPagination);
@@ -82,19 +87,19 @@ describe('Document Schema Validation', () => {
       }
     });
 
-    it('should reject query with limit > 100', () => {
+    it("should reject query with limit > 100", () => {
       const invalidQuery = {
-        q: 'database',
-        limit: '101',
+        q: "database",
+        limit: "101",
       };
 
       const result = SearchQuerySchema.safeParse(invalidQuery);
       expect(result.success).toBe(false);
     });
 
-    it('should reject query without q parameter', () => {
+    it("should reject query without q parameter", () => {
       const invalidQuery = {
-        limit: '10',
+        limit: "10",
       };
 
       const result = SearchQuerySchema.safeParse(invalidQuery);
@@ -102,15 +107,15 @@ describe('Document Schema Validation', () => {
     });
   });
 
-  describe('DocumentIdSchema', () => {
-    it('should validate a valid UUID', () => {
-      const validUuid = '550e8400-e29b-41d4-a716-446655440000';
+  describe("DocumentIdSchema", () => {
+    it("should validate a valid UUID", () => {
+      const validUuid = "550e8400-e29b-41d4-a716-446655440000";
       const result = DocumentIdSchema.safeParse(validUuid);
       expect(result.success).toBe(true);
     });
 
-    it('should reject an invalid UUID', () => {
-      const invalidUuid = 'not-a-uuid';
+    it("should reject an invalid UUID", () => {
+      const invalidUuid = "not-a-uuid";
       const result = DocumentIdSchema.safeParse(invalidUuid);
       expect(result.success).toBe(false);
     });

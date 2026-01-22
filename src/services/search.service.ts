@@ -35,10 +35,8 @@ export const search = async (
       offset,
       correlationId: 'cache',
     });
-    return {
-      ...cached,
-      took_ms: Date.now() - startTime,
-    };
+    cached.took_ms = Date.now() - startTime;
+    return cached;
   }
 
   // 2. Query Elasticsearch
