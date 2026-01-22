@@ -15,7 +15,10 @@ export const correlationIdMiddleware = (
   res: Response,
   next: NextFunction
 ): void => {
-  const correlationId = (req.headers['x-correlation-id'] as string) || uuidv4();
+  const headerValue = req.headers['x-correlation-id'] as string;
+  const correlationId = (headerValue && /^[a-zA-Z0-9-_]{1,128}$/.test(headerValue)) 
+    ? headerValue 
+    : uuidv4();
   req.correlationId = correlationId;
   res.setHeader('X-Correlation-ID', correlationId);
   next();

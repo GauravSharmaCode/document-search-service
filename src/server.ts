@@ -47,11 +47,16 @@ const startServer = async (): Promise<void> => {
     await elasticsearchClient.initializeIndex();
 
     // Start Express server
-    app.listen(config.port, () => {
+    const server = app.listen(config.port, () => {
       logger.info('Server started successfully', {
         port: config.port,
         nodeEnv: config.nodeEnv,
       });
+    });
+
+    server.on('error', (error: Error) => {
+      logger.error('Server error', error);
+      process.exit(1);
     });
   } catch (error) {
     logger.error('Failed to start server', error as Error);
@@ -60,14 +65,36 @@ const startServer = async (): Promise<void> => {
 };
 
 // Handle graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  try {
+    await prisma.$disconnect();
+    await redisClient.disconnect();
+  } catch (error) {
+    logger.error('Error during shutdown', error as Error);
+  }
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
+  try {
+    await prisma.$disconnect();
+    await redisClient.disconnect();
+  } catch (error) {
+    logger.error('Error during shutdown', error as Error);
+  }
   process.exit(0);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', { promise, reason });
+  process.exit(1);
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
 });
 
 // Start the server

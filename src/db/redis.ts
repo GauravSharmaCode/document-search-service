@@ -2,7 +2,7 @@ import { createClient, RedisClientType } from 'redis';
 import config from '../config';
 import { logger } from '../utils/logger';
 
-let client: RedisClientType;
+let client: RedisClientType | null = null;
 
 export const initialize = async (): Promise<void> => {
   client = createClient({
@@ -21,6 +21,7 @@ export const initialize = async (): Promise<void> => {
 };
 
 export const get = async (key: string): Promise<string | null> => {
+  if (!client) throw new Error('Redis client not initialized');
   try {
     return await client.get(key);
   } catch (error) {
@@ -30,6 +31,7 @@ export const get = async (key: string): Promise<string | null> => {
 };
 
 export const set = async (key: string, value: string, ttl?: number): Promise<void> => {
+  if (!client) throw new Error('Redis client not initialized');
   try {
     if (ttl) {
       await client.setEx(key, ttl, value);
@@ -43,6 +45,7 @@ export const set = async (key: string, value: string, ttl?: number): Promise<voi
 };
 
 export const del = async (key: string): Promise<void> => {
+  if (!client) throw new Error('Redis client not initialized');
   try {
     await client.del(key);
   } catch (error) {
@@ -52,6 +55,7 @@ export const del = async (key: string): Promise<void> => {
 };
 
 export const deletePattern = async (pattern: string): Promise<void> => {
+  if (!client) throw new Error('Redis client not initialized');
   try {
     const keys = await client.keys(pattern);
     if (keys.length > 0) {
@@ -65,6 +69,7 @@ export const deletePattern = async (pattern: string): Promise<void> => {
 };
 
 export const increment = async (key: string, ttl?: number): Promise<number> => {
+  if (!client) throw new Error('Redis client not initialized');
   try {
     const value = await client.incr(key);
     if (ttl && value === 1) {
@@ -79,6 +84,9 @@ export const increment = async (key: string, ttl?: number): Promise<number> => {
 
 export const healthCheck = async (): Promise<{ status: string; latency: number }> => {
   const start = Date.now();
+  if (!client) {
+    return { status: 'down', latency: 0 };
+  }
   try {
     await client.ping();
     const latency = Date.now() - start;
@@ -89,7 +97,19 @@ export const healthCheck = async (): Promise<{ status: string; latency: number }
   }
 };
 
+export const disconnect = async (): Promise<void> => {
+  if (client) {
+    try {
+      await client.disconnect();
+      client = null;
+    } catch (error) {
+      logger.error('Redis disconnect error', error as Error);
+    }
+  }
+};
+
 export const getClient = (): RedisClientType => {
+  if (!client) throw new Error('Redis client not initialized');
   return client;
 };
 

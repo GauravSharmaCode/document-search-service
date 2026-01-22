@@ -8,6 +8,7 @@ A distributed, multi-tenant document search service built with Node.js, TypeScri
 - **Multi-Tenancy** with strict tenant isolation
 - **Distributed Caching** using Redis for performance optimization
 - **Rate Limiting** (100 requests/minute per tenant)
+- **CSRF Protection** for state-changing operations
 - **Soft Delete** pattern for documents
 - **Health Monitoring** for all dependencies
 - **Structured Logging** with correlation IDs
@@ -23,6 +24,7 @@ A distributed, multi-tenant document search service built with Node.js, TypeScri
 │  │  • Correlation ID                            │  │
 │  │  • Tenant Validation                         │  │
 │  │  • Rate Limiting (Redis)                     │  │
+│  │  • CSRF Protection                           │  │
 │  │  • Error Handling                            │  │
 │  └──────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
@@ -58,26 +60,26 @@ A distributed, multi-tenant document search service built with Node.js, TypeScri
 # Copy environment variables
 cp .env.example .env
 
-# Install dependencies (optional, for local development)
-npm install
-```
-
-### 2. Start Services
-
-```bash
 # Start all services with Docker Compose
 docker-compose up -d
+```
 
+### 2. Verify Setup
+
+```bash
 # Check service status
 docker-compose ps
 
-# View logs
+# View API logs
 docker-compose logs -f api
+
+# Test health endpoint
+curl http://localhost:3000/health
 ```
 
 The API will be available at `http://localhost:3000`
 
-### 3. Verify Health
+### 3. Expected Health Response
 
 ```bash
 curl http://localhost:3000/health
@@ -104,6 +106,7 @@ Expected response:
 curl -X POST http://localhost:3000/v1/documents \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: tenant_abc" \
+  -H "X-CSRF-Token: tenant_abc-secure-token-12345" \
   -d '{
     "title": "Database Performance Tuning",
     "content": "Optimizing PostgreSQL queries for production workloads requires understanding query execution plans...",
@@ -186,23 +189,25 @@ Response (200 OK):
 
 ```bash
 curl -X DELETE http://localhost:3000/v1/documents/550e8400-e29b-41d4-a716-446655440000 \
-  -H "X-Tenant-ID: tenant_abc"
+  -H "X-Tenant-ID: tenant_abc" \
+  -H "X-CSRF-Token: tenant_abc-secure-token-12345"
 ```
 
 Response (204 No Content)
 
 ## Testing
 
-### Run Unit Tests
+### Run Tests
 
 ```bash
+# Run all tests
 npm test
-```
 
-### Run Tests with Coverage
+# Run tests with coverage
+npm run test:coverage
 
-```bash
-npm test -- --coverage
+# Run tests in watch mode
+npm run test:watch
 ```
 
 ### Manual Testing Scenarios
@@ -214,6 +219,7 @@ npm test -- --coverage
 DOC_ID=$(curl -s -X POST http://localhost:3000/v1/documents \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: tenant_a" \
+  -H "X-CSRF-Token: tenant_a-secure-token-12345" \
   -d '{"title":"Secret A","content":"Tenant A data"}' | jq -r '.id')
 
 # Try to access from tenant B (should return 404)
@@ -246,6 +252,23 @@ curl "http://localhost:3000/v1/search?q=performance" \
   -H "X-Tenant-ID: tenant_abc"
 ```
 
+#### 4. Test CSRF Protection
+
+```bash
+# Request without CSRF token (should return 400)
+curl -X POST http://localhost:3000/v1/documents \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: tenant_abc" \
+  -d '{"title":"Test","content":"Test content"}'
+
+# Request with valid CSRF token (should return 201)
+curl -X POST http://localhost:3000/v1/documents \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: tenant_abc" \
+  -H "X-CSRF-Token: tenant_abc-secure-token-12345" \
+  -d '{"title":"Test","content":"Test content"}'
+```
+
 Check logs with `docker-compose logs api` to see cache hit/miss.
 
 ## Error Handling
@@ -269,6 +292,7 @@ All errors follow a consistent format:
 | `TENANT_ERROR` | 400 | Missing or invalid tenant ID |
 | `NOT_FOUND` | 404 | Document not found |
 | `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
+| `CSRF_ERROR` | 400 | Missing or invalid CSRF token |
 | `INTERNAL_ERROR` | 500 | Server error |
 
 ## Configuration
@@ -286,6 +310,22 @@ Environment variables (see `.env.example`):
 | `RATE_LIMIT_MAX_REQUESTS` | 100 | Max requests per minute per tenant |
 
 ## Development
+
+### Docker Development (Recommended)
+
+```bash
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f api
+
+# Rebuild after code changes
+docker-compose up -d --build
+
+# Stop services
+docker-compose down
+```
 
 ### Local Development (without Docker)
 
@@ -409,8 +449,7 @@ docker-compose exec api npm run migrate
 ## Documentation
 
 - [Architecture Documentation](docs/ARCHITECTURE.md) - System design and data flows
-- [Production Readiness](docs/PRODUCTION_READINESS.md) - Scaling and production considerations
-- [Experience Showcase](docs/EXPERIENCE.md) - Related experience and case studies
+- [Requirements Documentation](docs/REQUIREMENTS.md) - Detailed requirements and specifications
 
 ## License
 

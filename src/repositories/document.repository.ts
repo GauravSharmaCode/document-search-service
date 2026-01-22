@@ -28,17 +28,15 @@ export const findById = async (
   tenantId: string,
   id: string
 ): Promise<Document | null> => {
-  const document = await prisma.document.findUnique({
+  const document = await prisma.document.findFirst({
     where: {
       id: id,
+      tenant_id: tenantId,
+      deleted_at: null,
     },
   });
 
-  if (document && document.tenant_id === tenantId && !document.deleted_at) {
-    return document;
-  }
-  
-  return null;
+  return document;
 };
 
 export const softDelete = async (
