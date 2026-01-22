@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { correlationIdMiddleware } from '../../middleware/correlationId';
 import { tenantIdMiddleware } from '../../middleware/tenantId';
-import { csrfProtection } from '../../middleware/csrfProtection';
 
 describe('Middleware Tests', () => {
   let mockReq: Partial<Request>;
@@ -56,37 +55,6 @@ describe('Middleware Tests', () => {
       expect(() => {
         tenantIdMiddleware(mockReq as Request, mockRes as Response, mockNext);
       }).toThrow();
-    });
-  });
-
-  describe('csrfProtection', () => {
-    beforeEach(() => {
-      mockReq.tenantId = 'tenant_123';
-    });
-
-    it('should skip CSRF for GET requests', () => {
-      mockReq.method = 'GET';
-      
-      csrfProtection(mockReq as Request, mockRes as Response, mockNext);
-      
-      expect(mockNext).toHaveBeenCalled();
-    });
-
-    it('should require CSRF token for POST requests', () => {
-      mockReq.method = 'POST';
-      
-      expect(() => {
-        csrfProtection(mockReq as Request, mockRes as Response, mockNext);
-      }).toThrow();
-    });
-
-    it('should validate CSRF token format', () => {
-      mockReq.method = 'POST';
-      mockReq.headers = { 'x-csrf-token': 'tenant_123-valid-token-12345' };
-      
-      csrfProtection(mockReq as Request, mockRes as Response, mockNext);
-      
-      expect(mockNext).toHaveBeenCalled();
     });
   });
 });

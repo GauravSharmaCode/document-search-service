@@ -1,3 +1,5 @@
+
+---# ARCHITECTURE.md
 # Architecture Documentation
 
 ## Table of Contents
@@ -20,36 +22,37 @@ The Document Search Service is a distributed system designed to provide fast, sc
 ```mermaid
 graph TB
     Client[Client Applications]
-    LB[Load Balancer]
-    API1[API Server 1]
-    API2[API Server 2]
-    APIn[API Server N]
     
-    PG[(PostgreSQL<br/>Source of Truth)]
-    ES[(Elasticsearch<br/>Search Index)]
-    Redis[(Redis<br/>Cache + Rate Limit)]
+    API[API Server<br/>Express.js + TypeScript<br/>Port 3000]
     
-    Client -->|HTTPS| LB
-    LB --> API1
-    LB --> API2
-    LB --> APIn
+    PG[(PostgreSQL<br/>Source of Truth<br/>Port 5432)]
+    ES[(Elasticsearch<br/>Search Index<br/>Port 9200)]
+    Redis[(Redis<br/>Cache + Rate Limit<br/>Port 6379)]
     
-    API1 --> PG
-    API1 --> ES
-    API1 --> Redis
+    Client -->|HTTP| API
     
-    API2 --> PG
-    API2 --> ES
-    API2 --> Redis
+    API -->|Metadata CRUD| PG
+    API -->|Search Index| ES
+    API -->|Cache & Rate Limit| Redis
     
-    APIn --> PG
-    APIn --> ES
-    APIn --> Redis
-    
+    style API fill:#2196F3
     style PG fill:#4CAF50
     style ES fill:#FFC107
     style Redis fill:#F44336
 ```
+
+**Current Deployment:**
+- Single API server instance (prototype)
+- All services containerized via Docker Compose
+- Direct service-to-service communication within Docker network
+
+**Production Scaling (High-Level):**
+- Horizontal scaling via load balancer and stateless API servers
+- Elasticsearch cluster for search scalability
+- PostgreSQL primary + read replicas with connection pooling
+- Redis HA (Cluster or Sentinel)
+- Authentication, monitoring, and alerting documented in production readiness
+
 
 ### Key Design Principles
 
@@ -62,7 +65,7 @@ graph TB
 
 3. **Tenant Isolation**: Mandatory tenant filtering at every layer prevents cross-tenant data leakage
 
-4. **Graceful Degradation**: System continues operating (read-only) even if Elasticsearch is down
+4. **Graceful Degradation**: Service boots without Redis or Elasticsearch; document CRUD stays online while search surfaces 503s until dependencies recover
 
 ---
 
@@ -72,7 +75,7 @@ graph TB
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│              Express Application                     │
+│              Express Application                    │
 ├─────────────────────────────────────────────────────┤
 │  Middleware Stack (executed in order):              │
 │  1. JSON Body Parser                                │
@@ -112,11 +115,11 @@ graph TB
 
 **Search Service:**
 - Handles search queries with caching
-- Interfaces with Elasticsearch
+- Interfaces with Elasticsearch; returns 503 when the cluster is unavailable
 - Implements pagination
 
 **Cache Service:**
-- Abstracts Redis operations
+- Abstracts Redis operations (no-ops when Redis is unavailable)
 - Generates consistent cache keys
 - Manages TTLs and invalidation patterns
 
@@ -172,7 +175,6 @@ sequenceDiagram
     PostgreSQL-->>API: Return document with ID
     API->>Elasticsearch: Index document (async)
     Elasticsearch-->>API: Acknowledge
-    API->>Redis: Invalidate search cache
     API-->>Client: 201 Created + document ID
 ```
 
@@ -180,7 +182,7 @@ sequenceDiagram
 1. **Validation**: Tenant ID header and request body validated
 2. **PostgreSQL Write**: Document saved to database (ACID transaction)
 3. **Elasticsearch Indexing**: Document indexed for search (async, best-effort)
-4. **Cache Invalidation**: Search results for tenant invalidated
+  4. **Cache Consistency**: No synchronous cache work; TTL handles eventual freshness
 5. **Response**: Return document ID to client
 
 **Timing:**
@@ -330,8 +332,8 @@ rate_limit:tenant_abc
 
 | Layer | Technology | TTL | Invalidation Trigger |
 |-------|-----------|-----|---------------------|
-| Search Results | Redis | 300s | Document create/update/delete |
-| Document Retrieval | Redis | 600s | Document update/delete |
+| Search Results | Redis | 300s | TTL expiry (no immediate invalidation) |
+| Document Retrieval | Redis | 600s | Document delete (async eviction) |
 
 ### Cache Key Design
 
@@ -340,30 +342,25 @@ rate_limit:tenant_abc
 search:{tenant_id}:{query}:{limit}:{offset}
 ```
 - Includes pagination parameters to avoid stale results
-- Invalidated on any document change for tenant
+- Expires naturally through TTL; no wildcard invalidations required
 
 **Document Cache:**
 ```
 document:{tenant_id}:{document_id}
 ```
-- Invalidated on document update or delete
+- Evicted on document delete; otherwise refreshed on cache miss
 
 ### Invalidation Strategy
 
 **On Document Create:**
-```javascript
-await redis.deletePattern(`search:${tenantId}:*`);
-```
-- Invalidates all search results for tenant
-- Document cache unaffected (new document not cached yet)
+- No immediate cache busting. Search entries expire via TTL (300s), keeping writes fast.
 
 **On Document Delete:**
-```javascript
-await redis.del(`document:${tenantId}:${documentId}`);
-await redis.deletePattern(`search:${tenantId}:*`);
+```typescript
+cacheService.evictDocumentCache(tenantId, documentId);
 ```
-- Removes specific document from cache
-- Invalidates all search results for tenant
+- Fire-and-forget removal of the document cache entry (O(1))
+- Search results rely on TTL-based expiry
 
 ### Cache Performance
 
@@ -407,8 +404,8 @@ await redis.deletePattern(`search:${tenantId}:*`);
 | Scenario | Behavior | Acceptable? |
 |----------|----------|-------------|
 | Document created, immediately searched | May not appear in results for ~5s | ✅ Yes (search is best-effort) |
-| Document deleted, still in cache | May return 404 on retrieval | ✅ Yes (cache invalidated, will expire) |
-| Elasticsearch down | Document retrieval works, search fails | ✅ Yes (graceful degradation) |
+| Document deleted, still in cache | May return 404 on retrieval | ✅ Yes (document key evicted; search cache expires via TTL) |
+| Elasticsearch down | Document retrieval works, search returns 503 | ✅ Yes (graceful degradation) |
 
 ### Handling Inconsistencies
 
@@ -506,31 +503,15 @@ try {
 - Connection pooling to manage connections
 - Partitioning by tenant_id for very large datasets
 
-### Vertical Scaling Limits
-
-| Component | Vertical Limit | Horizontal Alternative |
-|-----------|---------------|----------------------|
-| API Server | 8 vCPU | Add more instances |
-| PostgreSQL | 64 vCPU | Read replicas, sharding |
-| Elasticsearch | 32 vCPU | Add more nodes to cluster |
-| Redis | 16 vCPU | Redis Cluster (sharding) |
-
 ---
 
-## Monitoring and Observability
+### Monitoring & Observability (Prototype)
+- Structured JSON logging with correlation ID and tenant ID
+- `/health` endpoint reporting dependency status and latency
+- Errors logged with context for debugging
 
-### Structured Logging
+Advanced observability (metrics, tracing, dashboards) is documented for production readiness.
 
-```json
-{
-  "timestamp": "2026-01-22T00:00:00.000Z",
-  "level": "info",
-  "message": "Document indexed successfully",
-  "correlationId": "abc123",
-  "tenantId": "tenant_abc",
-  "documentId": "550e8400-..."
-}
-```
 
 ### Health Checks
 
@@ -566,3 +547,5 @@ This architecture demonstrates:
 ✅ **Maintainability**: Clean code structure, comprehensive logging
 
 The design balances **simplicity** (for a 3-4 hour prototype) with **production-readiness** (demonstrating real-world patterns).
+
+---# END ARCHITECTURE.md

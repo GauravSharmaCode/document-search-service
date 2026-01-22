@@ -2,6 +2,7 @@ import * as elasticsearchClient from '../db/elasticsearch';
 import * as cacheService from './cache.service';
 import config from '../config';
 import { logger } from '../utils/logger';
+import { ServiceUnavailableError } from '../utils/errors';
 
 export interface SearchResult {
   results: Array<{
@@ -47,7 +48,18 @@ export const search = async (
     offset,
   });
 
-  const searchResult = await elasticsearchClient.search(tenantId, query, limit, offset);
+  let searchResult: { results: any[]; total: number; took: number };
+  try {
+    searchResult = await elasticsearchClient.search(tenantId, query, limit, offset);
+  } catch (error) {
+    logger.error('Search service unavailable', error as Error, {
+      tenantId,
+      query,
+      limit,
+      offset,
+    });
+    throw new ServiceUnavailableError('Search service temporarily unavailable');
+  }
 
   const result: SearchResult = {
     results: searchResult.results,

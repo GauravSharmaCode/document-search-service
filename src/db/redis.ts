@@ -1,27 +1,45 @@
-import { createClient, RedisClientType } from 'redis';
+import { createClient } from 'redis';
 import config from '../config';
 import { logger } from '../utils/logger';
 
-let client: RedisClientType | null = null;
+type RedisClient = ReturnType<typeof createClient>;
 
-export const initialize = async (): Promise<void> => {
-  client = createClient({
+let client: RedisClient | null = null;
+
+export const initialize = async (): Promise<boolean> => {
+  const instance = createClient({
     url: config.redis.url,
   });
 
-  client.on('error', (err) => {
+  instance.on('error', (err) => {
     logger.error('Redis client error', err);
   });
 
-  client.on('connect', () => {
+  instance.on('connect', () => {
     logger.info('Redis client connected');
   });
 
-  await client.connect();
+  try {
+    await instance.connect();
+    client = instance;
+    return true;
+  } catch (error) {
+    logger.warn('Redis unavailable, continuing without cache', error as Error);
+    try {
+      await instance.disconnect();
+    } catch (disconnectError) {
+      logger.debug('Ignored Redis disconnect error after failed init', disconnectError as Error);
+    }
+    client = null;
+    return false;
+  }
 };
 
 export const get = async (key: string): Promise<string | null> => {
-  if (!client) throw new Error('Redis client not initialized');
+  if (!client) {
+    logger.debug('Redis unavailable, cache get skipped', { key });
+    return null;
+  }
   try {
     return await client.get(key);
   } catch (error) {
@@ -31,7 +49,10 @@ export const get = async (key: string): Promise<string | null> => {
 };
 
 export const set = async (key: string, value: string, ttl?: number): Promise<void> => {
-  if (!client) throw new Error('Redis client not initialized');
+  if (!client) {
+    logger.debug('Redis unavailable, cache set skipped', { key });
+    return;
+  }
   try {
     if (ttl) {
       await client.setEx(key, ttl, value);
@@ -40,22 +61,26 @@ export const set = async (key: string, value: string, ttl?: number): Promise<voi
     }
   } catch (error) {
     logger.error('Redis SET error', error as Error, { key, ttl });
-    throw error;
   }
 };
 
 export const del = async (key: string): Promise<void> => {
-  if (!client) throw new Error('Redis client not initialized');
+  if (!client) {
+    logger.debug('Redis unavailable, cache delete skipped', { key });
+    return;
+  }
   try {
     await client.del(key);
   } catch (error) {
     logger.error('Redis DEL error', error as Error, { key });
-    throw error;
   }
 };
 
 export const deletePattern = async (pattern: string): Promise<void> => {
-  if (!client) throw new Error('Redis client not initialized');
+  if (!client) {
+    logger.debug('Redis unavailable, cache pattern delete skipped', { pattern });
+    return;
+  }
   try {
     const keys = await client.keys(pattern);
     if (keys.length > 0) {
@@ -64,12 +89,14 @@ export const deletePattern = async (pattern: string): Promise<void> => {
     }
   } catch (error) {
     logger.error('Redis DELETE PATTERN error', error as Error, { pattern });
-    throw error;
   }
 };
 
 export const increment = async (key: string, ttl?: number): Promise<number> => {
-  if (!client) throw new Error('Redis client not initialized');
+  if (!client) {
+    logger.debug('Redis unavailable, rate limiting skipped', { key });
+    return 1;
+  }
   try {
     const value = await client.incr(key);
     if (ttl && value === 1) {
@@ -78,7 +105,7 @@ export const increment = async (key: string, ttl?: number): Promise<number> => {
     return value;
   } catch (error) {
     logger.error('Redis INCR error', error as Error, { key });
-    throw error;
+    return 1;
   }
 };
 
@@ -101,15 +128,15 @@ export const disconnect = async (): Promise<void> => {
   if (client) {
     try {
       await client.disconnect();
-      client = null;
     } catch (error) {
       logger.error('Redis disconnect error', error as Error);
+    } finally {
+      client = null;
     }
   }
 };
 
-export const getClient = (): RedisClientType => {
-  if (!client) throw new Error('Redis client not initialized');
+export const getClient = (): RedisClient | null => {
   return client;
 };
 
@@ -122,4 +149,5 @@ export default {
   increment,
   healthCheck,
   getClient,
+  disconnect,
 };

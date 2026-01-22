@@ -49,6 +49,12 @@ export class TenantError extends AppError {
   }
 }
 
+export class ServiceUnavailableError extends AppError {
+  constructor(message: string, details?: any) {
+    super(503, "SERVICE_UNAVAILABLE", message, details);
+  }
+}
+
 export const isAppError = (error: unknown): error is AppError => {
   return error instanceof AppError;
 };
