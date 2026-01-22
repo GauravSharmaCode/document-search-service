@@ -31,9 +31,6 @@ export const indexDocument = async (
     // Don't fail the request if Elasticsearch indexing fails
   }
 
-  // 3. Invalidate search cache for this tenant
-  await cacheService.invalidate(`search:${tenantId}:*`);
-
   logger.info('Document indexed successfully', {
     documentId: document.id,
     tenantId,
@@ -104,8 +101,8 @@ export const deleteDocument = async (
     });
   }
 
-  // 3. Invalidate cache
-  await cacheService.invalidateDocument(tenantId, documentId);
+  // 3. Fire-and-forget cache eviction for document key (search cache relies on TTL)
+  cacheService.evictDocumentCache(tenantId, documentId);
 
   logger.info('Document deleted successfully', { documentId, tenantId });
 };

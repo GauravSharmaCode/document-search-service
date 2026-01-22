@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import redis from '../db/redis';
 import config from '../config';
-import { RateLimitError } from '../utils/errors';
+import { RateLimitExceededError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 export const rateLimiterMiddleware = async (
@@ -30,7 +30,7 @@ export const rateLimiterMiddleware = async (
         limit: config.rateLimit.maxRequests,
         correlationId: req.correlationId,
       });
-      throw new RateLimitError(
+      throw new RateLimitExceededError(
         'Tenant has exceeded rate limit',
         windowSeconds
       );

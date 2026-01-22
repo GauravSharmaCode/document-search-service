@@ -8,7 +8,6 @@ A distributed, multi-tenant document search service built with Node.js, TypeScri
 - **Multi-Tenancy** with strict tenant isolation
 - **Distributed Caching** using Redis for performance optimization
 - **Rate Limiting** (100 requests/minute per tenant)
-- **CSRF Protection** for state-changing operations
 - **Soft Delete** pattern for documents
 - **Health Monitoring** for all dependencies
 - **Structured Logging** with correlation IDs
@@ -24,7 +23,6 @@ A distributed, multi-tenant document search service built with Node.js, TypeScri
 │  │  • Correlation ID                            │  │
 │  │  • Tenant Validation                         │  │
 │  │  • Rate Limiting (Redis)                     │  │
-│  │  • CSRF Protection                           │  │
 │  │  • Error Handling                            │  │
 │  └──────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
@@ -106,7 +104,6 @@ Expected response:
 curl -X POST http://localhost:3000/v1/documents \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: tenant_abc" \
-  -H "X-CSRF-Token: tenant_abc-secure-token-12345" \
   -d '{
     "title": "Database Performance Tuning",
     "content": "Optimizing PostgreSQL queries for production workloads requires understanding query execution plans...",
@@ -190,7 +187,6 @@ Response (200 OK):
 ```bash
 curl -X DELETE http://localhost:3000/v1/documents/550e8400-e29b-41d4-a716-446655440000 \
   -H "X-Tenant-ID: tenant_abc" \
-  -H "X-CSRF-Token: tenant_abc-secure-token-12345"
 ```
 
 Response (204 No Content)
@@ -219,7 +215,6 @@ npm run test:watch
 DOC_ID=$(curl -s -X POST http://localhost:3000/v1/documents \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: tenant_a" \
-  -H "X-CSRF-Token: tenant_a-secure-token-12345" \
   -d '{"title":"Secret A","content":"Tenant A data"}' | jq -r '.id')
 
 # Try to access from tenant B (should return 404)
@@ -252,23 +247,6 @@ curl "http://localhost:3000/v1/search?q=performance" \
   -H "X-Tenant-ID: tenant_abc"
 ```
 
-#### 4. Test CSRF Protection
-
-```bash
-# Request without CSRF token (should return 400)
-curl -X POST http://localhost:3000/v1/documents \
-  -H "Content-Type: application/json" \
-  -H "X-Tenant-ID: tenant_abc" \
-  -d '{"title":"Test","content":"Test content"}'
-
-# Request with valid CSRF token (should return 201)
-curl -X POST http://localhost:3000/v1/documents \
-  -H "Content-Type: application/json" \
-  -H "X-Tenant-ID: tenant_abc" \
-  -H "X-CSRF-Token: tenant_abc-secure-token-12345" \
-  -d '{"title":"Test","content":"Test content"}'
-```
-
 Check logs with `docker-compose logs api` to see cache hit/miss.
 
 ## Error Handling
@@ -292,7 +270,6 @@ All errors follow a consistent format:
 | `TENANT_ERROR` | 400 | Missing or invalid tenant ID |
 | `NOT_FOUND` | 404 | Document not found |
 | `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
-| `CSRF_ERROR` | 400 | Missing or invalid CSRF token |
 | `INTERNAL_ERROR` | 500 | Server error |
 
 ## Configuration
@@ -449,7 +426,26 @@ docker-compose exec api npm run migrate
 ## Documentation
 
 - [Architecture Documentation](docs/ARCHITECTURE.md) - System design and data flows
-- [Requirements Documentation](docs/REQUIREMENTS.md) - Detailed requirements and specifications
+- [Production Readiness](docs/PRODUCTION_READINESS.md) - Deployment, monitoring, and scaling
+- [Experience & Lessons Learned](docs/EXPERIENCE.md) - Industry experience insights
+  
+## Prototype vs Production
+
+**This is a functional prototype demonstrating architectural patterns.**
+
+**What's implemented:**
+- ✅ Working end-to-end document search
+- ✅ Multi-tenant isolation
+- ✅ Caching and rate limiting
+- ✅ Comprehensive health checks
+- ✅ Graceful error handling
+
+**What's documented but requires additional work for production:**
+- ⚠️ Async indexing uses try/catch pattern; production would add message queue with retry logic
+- ⚠️ Single-instance deployment; production requires horizontal scaling
+- ⚠️ Performance metrics are estimates; production requires load testing and validation
+
+**See `docs/PRODUCTION_READINESS.md` for complete production strategy.**
 
 ## License
 

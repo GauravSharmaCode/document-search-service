@@ -1,5 +1,8 @@
 version: '3.8'
 
+# Docker Compose setup for local development and prototype evaluation
+
+
 services:
   # API Server
   api:

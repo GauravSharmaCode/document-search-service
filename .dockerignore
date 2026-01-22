@@ -17,4 +17,3 @@ __tests__/
 *.test.js
 jest.config.js
 .eslintrc.js
-tsconfig.json

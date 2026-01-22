@@ -33,18 +33,24 @@ const startServer = async (): Promise<void> => {
   try {
     logger.info('Starting document search service...');
 
-    // Connect to Database
+    // Connect to Database (critical dependency)
     logger.info('Connecting to Database via Prisma...');
     await prisma.$connect();
 
-    // Initialize Redis
+    // Initialize Redis (best effort)
     logger.info('Connecting to Redis...');
-    await redisClient.initialize();
+    const redisReady = await redisClient.initialize();
+    if (!redisReady) {
+      logger.warn('Redis connection unavailable at startup. Proceeding without cache or rate limiting.');
+    }
 
-
-    // Initialize Elasticsearch index
+    // Initialize Elasticsearch index (best effort)
     logger.info('Initializing Elasticsearch index...');
-    await elasticsearchClient.initializeIndex();
+    try {
+      await elasticsearchClient.initializeIndex();
+    } catch (error) {
+      logger.warn('Elasticsearch initialization failed at startup. Search API will return 503 until available.', error as Error);
+    }
 
     // Start Express server
     const server = app.listen(config.port, () => {
@@ -87,8 +93,8 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', { promise, reason });
+process.on('unhandledRejection', (reason: unknown) => {
+  logger.error('Unhandled Rejection:', reason instanceof Error ? reason : new Error(String(reason)));
   process.exit(1);
 });
 

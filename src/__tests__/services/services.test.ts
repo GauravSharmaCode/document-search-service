@@ -86,8 +86,6 @@ describe('Service Tests', () => {
       const elasticsearchClient = require('../../db/elasticsearch');
       elasticsearchClient.indexDocument = jest.fn().mockResolvedValue(true);
 
-      jest.spyOn(cacheService, 'invalidate').mockResolvedValue(undefined);
-
       const result = await documentService.indexDocument('tenant_123', {
         title: 'Test Doc',
         content: 'Test content'

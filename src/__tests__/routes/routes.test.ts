@@ -66,7 +66,6 @@ describe('Routes Integration Tests', () => {
       const response = await request(app)
         .post('/v1/documents')
         .set('X-Tenant-ID', 'tenant_123')
-        .set('X-CSRF-Token', 'tenant_123-valid-token-12345')
         .send({
           title: 'Test Document',
           content: 'Test content',

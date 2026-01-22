@@ -39,18 +39,17 @@ export const set = async (key: string, value: any, ttl: number): Promise<void> =
   }
 };
 
-export const invalidate = async (pattern: string): Promise<void> => {
-  try {
-    await redis.deletePattern(pattern);
-    logger.debug('Cache invalidated', { pattern });
-  } catch (error) {
-    logger.error('Cache invalidate error', error as Error, { pattern });
-  }
-};
+export const evictDocumentCache = (tenantId: string, documentId: string): void => {
+  const key = generateDocumentKey(tenantId, documentId);
 
-export const invalidateDocument = async (tenantId: string, documentId: string): Promise<void> => {
-  await invalidate(`document:${tenantId}:${documentId}`);
-  await invalidate(`search:${tenantId}:*`);
+  void redis
+    .del(key)
+    .then(() => {
+      logger.debug('Document cache evicted', { key });
+    })
+    .catch((error: Error) => {
+      logger.error('Document cache eviction error', error, { key });
+    });
 };
 
 export default {
@@ -58,6 +57,5 @@ export default {
   generateDocumentKey,
   get,
   set,
-  invalidate,
-  invalidateDocument,
+  evictDocumentCache,
 };

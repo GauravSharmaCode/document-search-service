@@ -2,12 +2,11 @@ import { Router, Request, Response, NextFunction } from 'express';
 import * as documentService from '../services/document.service';
 import { CreateDocumentSchema, DocumentIdSchema } from '../schemas/document.schema';
 import { logger } from '../utils/logger';
-import { csrfProtection } from '../middleware/csrfProtection';
 
 const router = Router();
 
 // POST /v1/documents - Create document
-router.post('/', csrfProtection, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenantId = req.tenantId!;
     const data = CreateDocumentSchema.parse(req.body);
@@ -46,7 +45,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 });
 
 // DELETE /v1/documents/:id - Delete document
-router.delete('/:id', csrfProtection, async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenantId = req.tenantId!;
     const documentId = DocumentIdSchema.parse(req.params.id);
